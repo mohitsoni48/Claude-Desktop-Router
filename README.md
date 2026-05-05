@@ -138,6 +138,10 @@ The script creates a `.backup` file before writing. To restore manually:
 2. Copy it over the current `00000000-0000-4000-8000-000000000114.json`
 3. Restart Claude Desktop
 
+## Future Goals
+
+- **Remove Ollama dependency** — Currently the script requires `ollama launch claude-desktop` to create the initial `Claude-3p` directory structure. The goal is to generate all required config files from scratch without needing Ollama installed, making this a fully standalone setup tool.
+
 ## License
 
 MIT
