@@ -110,15 +110,33 @@ Fully quit (tray icon → Quit), then relaunch.
 - Claude Desktop's embedded Claude Code may cap context at 200k tokens for unknown models, even if your gateway reports a larger `context_length`. This is a client-side hardcoded limit.
 - Web search, billing, and other Anthropic-cloud-only features are unavailable in third-party mode.
 
-## Reverting to Ollama
+## Reverting to Original Claude (Anthropic)
 
-The script creates a `.backup` file before writing. To restore:
+To switch back to the standard Anthropic Claude profile:
+
+```bash
+ollama launch claude-desktop --restore
+```
+
+Then fully restart Claude Desktop.
+
+### Reverting to Ollama
+
+If you want to go back to Ollama instead of your custom gateway:
+
+```bash
+ollama launch claude-desktop
+```
+
+This re-applies Ollama's default config.
+
+### Manual Restore from Backup
+
+The script creates a `.backup` file before writing. To restore manually:
 
 1. Find the backup in `configLibrary/00000000-0000-4000-8000-000000000114.json.backup`
 2. Copy it over the current `00000000-0000-4000-8000-000000000114.json`
 3. Restart Claude Desktop
-
-Or simply re-run `ollama launch claude-desktop` to reset to Ollama's defaults.
 
 ## License
 
