@@ -1,34 +1,58 @@
 # Claude Desktop Custom Gateway Setup
 
-A cross-platform Python script that routes Claude Desktop to any custom Anthropic-compatible API endpoint (e.g., Kimi, OpenRouter, local LLM).
+A cross-platform Python script that routes Claude Desktop to any custom Anthropic-compatible API endpoint (e.g., Kimi, OpenRouter, local LLM) — **no Ollama required**.
 
 ## How It Works
 
-Claude Desktop supports an enterprise gateway mode. When Ollama runs `ollama launch claude-desktop`, it creates a small config library that points Claude to Ollama's API. This script swaps those credentials for your own gateway — keeping everything else untouched.
+Claude Desktop has an undocumented "enterprise gateway" (3P) mode. When activated, it routes all inference through a custom API endpoint instead of `api.anthropic.com`. This script creates the minimal config files that activate this mode and point it at your gateway.
+
+For non-Anthropic gateways, the script uses the `inferenceModels` config field to bypass model discovery and present your gateway's model as an Anthropic-compatible one.
 
 ## Prerequisites
 
 - Python 3.7+
-- [Ollama](https://ollama.com/download) installed and in your PATH
-- `ollama launch claude-desktop` already run at least once on this machine
+- Claude Desktop installed
 - A gateway that supports:
   - `GET /v1/models` — for model discovery
   - `POST /v1/messages` — Anthropic Messages API format (streaming)
 
 ## Quick Start
 
+### Interactive Mode
+
 ```bash
 python setup-claude-gateway.py
 ```
 
 The script will:
-1. Check that Ollama is installed
-2. Run `ollama launch claude-desktop` (or skip if already done)
-3. Ask for your gateway Base URL, API Key, and Display Name
-4. Write the config and create a backup of the original
+1. Auto-detect your OS and locate the Claude-3p config directory
+2. Back up your existing config
+3. Ask for your gateway Base URL, API Key, and Anthropic Model ID
+4. Write the config files
 5. Tell you to restart Claude Desktop
 
-After restart, your gateway's models should appear in the Claude Desktop model picker.
+### Non-Interactive Mode (AI Assistants / CI)
+
+```bash
+python setup-claude-gateway.py \
+  --base-url https://api.kimi.com/coding/ \
+  --api-key sk-xxxxxxxxx \
+  --model-id claude-sonnet-4-5
+```
+
+After restart, your gateway's model should appear in the Claude Desktop model picker with the Anthropic model ID you specified.
+
+## Choosing a Model ID
+
+Claude Desktop v1.96+ validates model IDs from custom gateways. Use `inferenceModels` to bypass discovery and present any model as an Anthropic one:
+
+| What you want | `--model-id` value |
+|---------------|-------------------|
+| Claude 3.5 Sonnet | `claude-3-5-sonnet-20241022` |
+| Claude 4 Sonnet | `claude-sonnet-4-20250514` |
+| Claude 3 Opus | `claude-3-opus-20240229` |
+
+The model ID you choose determines how Claude Desktop labels and treats the model (context limit, capabilities, etc.). The actual API calls are forwarded to your gateway unchanged.
 
 ## Supported Platforms
 
@@ -45,23 +69,35 @@ The script auto-detects your OS and uses the correct path.
 
 If you prefer to do it manually — or you're asking an AI assistant to do it for you — follow these steps:
 
-### Step 1: Ensure Ollama setup is done
+### Step 1: Locate the config directory
 
-Run this in your terminal:
+Find your OS-specific `Claude-3p/` path from the table above. Create it if it doesn't exist.
 
-```bash
-ollama launch claude-desktop
+### Step 2: Create the deployment mode flag
+
+Create or edit:
+
+```
+Claude-3p/claude_desktop_config.json
 ```
 
-This creates the `Claude-3p` directory and config files.
+If the file already exists, **preserve all existing fields** and only add/ensure:
 
-### Step 2: Locate the config library
+```json
+{
+  "deploymentMode": "3p"
+}
+```
 
-Find your OS-specific `Claude-3p/configLibrary/` path from the table above.
+If the file does not exist, create it with just:
 
-### Step 3: Edit the gateway config
+```json
+{ "deploymentMode": "3p" }
+```
 
-Open or create:
+### Step 3: Create the gateway config
+
+Create the `configLibrary` directory inside `Claude-3p/`, then create:
 
 ```
 configLibrary/00000000-0000-4000-8000-000000000114.json
@@ -71,17 +107,23 @@ Write:
 
 ```json
 {
-  "disableDeploymentModeChooser": true,
+  "inferenceProvider": "gateway",
+  "inferenceCredentialKind": "static",
   "inferenceGatewayApiKey": "YOUR_API_KEY",
   "inferenceGatewayAuthScheme": "bearer",
   "inferenceGatewayBaseUrl": "https://your-gateway.com/",
-  "inferenceProvider": "gateway"
+  "inferenceModels": [
+    {
+      "name": "claude-sonnet-4-5",
+      "labelOverride": "claude-sonnet-4-5"
+    }
+  ]
 }
 ```
 
-### Step 4: Update the config registry
+### Step 4: Create the config registry
 
-Open or create:
+Create:
 
 ```
 configLibrary/_meta.json
@@ -95,7 +137,7 @@ Write:
   "entries": [
     {
       "id": "00000000-0000-4000-8000-000000000114",
-      "name": "YourGatewayName"
+      "name": "claude-sonnet-4-5"
     }
   ]
 }
@@ -105,42 +147,27 @@ Write:
 
 Fully quit (tray icon → Quit), then relaunch.
 
+## Reverting to Original Claude (Anthropic)
+
+### Via Script
+
+```bash
+python setup-claude-gateway.py --restore
+```
+
+### Manually
+
+Remove or edit these files to revert:
+
+1. In `Claude-3p/claude_desktop_config.json`, remove the `"deploymentMode": "3p"` line
+2. Delete the `Claude-3p/configLibrary/` directory entirely
+
+Then fully restart Claude Desktop.
+
 ## Limitations
 
 - Claude Desktop's embedded Claude Code may cap context at 200k tokens for unknown models, even if your gateway reports a larger `context_length`. This is a client-side hardcoded limit.
 - Web search, billing, and other Anthropic-cloud-only features are unavailable in third-party mode.
-
-## Reverting to Original Claude (Anthropic)
-
-To switch back to the standard Anthropic Claude profile:
-
-```bash
-ollama launch claude-desktop --restore
-```
-
-Then fully restart Claude Desktop.
-
-### Reverting to Ollama
-
-If you want to go back to Ollama instead of your custom gateway:
-
-```bash
-ollama launch claude-desktop
-```
-
-This re-applies Ollama's default config.
-
-### Manual Restore from Backup
-
-The script creates a `.backup` file before writing. To restore manually:
-
-1. Find the backup in `configLibrary/00000000-0000-4000-8000-000000000114.json.backup`
-2. Copy it over the current `00000000-0000-4000-8000-000000000114.json`
-3. Restart Claude Desktop
-
-## Future Goals
-
-- **Remove Ollama dependency** — Currently the script requires `ollama launch claude-desktop` to create the initial `Claude-3p` directory structure. The goal is to generate all required config files from scratch without needing Ollama installed, making this a fully standalone setup tool.
 
 ## License
 
